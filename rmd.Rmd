@@ -1,0 +1,205 @@
+---
+title: "AQI by PM2.5 pollutant in Polish provincial cities, compared to Lublin"
+author: "Filip Pietroń"
+output: html_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+source("script.r", local = knitr::knit_global())
+```
+
+## Motivation
+
+I've always considered my homeland's air quality quite good in comparison to other major cities in Poland.
+My conclusions have always been empirical, though - it would be profitable to clash them against reality.
+
+## Perfect dataset
+
+Perfect dataset would contain information about PM2.5 air pollution from one station per provincial city,
+preferably one that is placed in a busy area, e.g. center of the city, from the past 6 years(January 2015 - December 2020).
+
+## ...and the actual one
+
+I've started by looking at aqicn.org as it provides data directly in AQI (Air Quality Index) format.
+It started off really well - I quickly acquired data for Lublin from Obywatelska St. However, it was not so pretty
+for other cities. I've not been able to find reliable data for most other cities, so I gave up on that.
+
+So I went to GIOŚ sources - here I was able to get results, city by city. I stuck to finding manual entries (one per 24h), which rendered me unable to use data from stations that are definetely in city centres. What is more, data for the following cities is missing:
+
+* Krakow - no manual entries
+* Poznan - no PM2.5 data, apparantely
+* Gdansk - same as with Poznan
+
+Therefore, I gathered data from the following stations:
+
+* Lublin Ul. Śliwińskiego
+* Szczecin, ul. Andrzejewskiego
+* Katowice, ul. Kossutha 6
+* Rzeszów, Nowe Miasto
+* Białystok, ul. Warszawska
+* Opole, ul. Manualna 4
+* Warszawa, ul. Targówek
+* Zielona Góra, ul. Krótka
+* Gorzów Wlkp., ul. Piłsudskiego
+* Łódź, Widzew
+* Toruń, POLICJA
+* Bydgoszcz, Fieldorfa
+* Wrocław, Na Grobli
+
+
+## Data tidying
+
+### Initial Excel work through
+
+I've started tidying the data by loading up each csv into MS Excel. There I was able to initially clear some unnecessary bits,
+such as extra columns. Each CSV was reexported to the same directory with a similar name. The final parsed csv format is as follows:
+```{r lublin_csv_parsed_head}
+head(lublin)
+```
+### Parsing in R
+
+#### Tidying process
+
+What I've done to the data exported from Excel was:
+
+1. Read the csv file for the city using `read.csv`
+2. Change empty values to `NA`
+3. Trim all pm25 values (as GIOŚ exported them as e.g. `"\t25.8\t"`)
+4. Remove obsolete row with station location
+5. Parse pm25 values to `dbls`
+6. Parse dates to `Date`
+7. Ensured increasing date order (from `2015-01-01` all the way to `2020-12-31`)
+
+#### Combining results into useful data frames
+
+After the tidying process, I ended up with variables storing dates and daily pm25 values for each city. 
+
+Luckily data from GIOŚ came with empty values for missing measurements, so I was able to put all cities as columns in a single 
+data frame I called `base`. Then, basing on `base`(pun not intended), I created:
+- `avg_pm25_by_month` - average pm25 per month in each city
+```{r avg_pm25_by_month_table}
+kable(avg_pm25_by_month[1:5,], caption = 'avg_pm25_by_month')
+```
+
+- `avg_aqi_by_month` - average AQI value per month in each city
+```{r avg_aqi_by_month_table}
+kable(avg_aqi_by_month[1:5,], caption = 'avg_pm25_by_month')
+```
+
+- `avg_aqi_by_year` - average AQI value per year in each city
+```{r avg_aqi_by_year_table}
+kable(avg_aqi_by_year[1:5,], caption = 'avg_aqi_by_year')
+```
+
+### Plotting with some twists
+
+### Average pm25 value
+
+First of all, let's take a look at the raw PM2.5 values between the cities.
+
+```{r average_pm25_value_barplot, fig.align = 'center'}
+means <- by_predicate(base, mean)
+
+barplot(
+  means,
+  main = "Average PM2.5 value in provincial cities in years 2015-2020",
+  xlab = "PM2.5 (ug/cm^3)",
+  ylab = "City",
+  cex.axis = 0.75,
+  cex.names = 0.5,
+  col = ifelse(means > means[1], "red", ifelse(means == means[1], "blue", "grey")),
+  width = city_name_to_column_width
+)
+
+abline(h = means[1], col="red")
+
+```
+
+The higher the average PM2.5 concentration, the more polluted the air is. As we can see, Lublin does not seem to
+be the most healthy of the bunch, contrary to my belief. However, the raw PM2.5 value does not provide much insight,
+so let's see how it maps to [Air Quality Index](https://en.wikipedia.org/wiki/Air_quality_index) values.
+
+### Average Air Quality Index
+
+```{r average_aqi_plot, fig.align = 'center'}
+
+ggplot(data = aqi_df, aes(x = reorder(city, mean_aqi), y = mean_aqi)) + geom_bar(stat = "identity", fill = aqi_df$color) + scale_y_continuous(breaks = seq(0, 100, by = 2)) + labs(x = "City", y = "Average AQI", title = "Average AQI in provincial cities in years 2015-2020")
+
+
+```
+Bar color indicates the AQI group, which appears to be moderate for each of the considered cities.
+
+Surprisingly, Warsaw is not far ahead of Lublin in this so-called hall of shame. I really wish GIOS would provide manual(24h) data for Krakow and how it would affect the results.
+
+Before moving forward, let's take a look at the summary of average AQI between the cities:
+```{r aqi_df_summary, fig.align = 'center'}
+summary(aqi_df$mean_aqi)
+```
+
+It would appear that average air quality in each city fits into the moderate category - however, five years is a long period of time, so maybe we should take a look at data year by year.
+
+### Values in cities across years
+
+Next step is to investigate how Lublin's AQI turned out between years across other cities.
+
+```{r average_yearly_aqi_line_plot, fig.align = 'center'}
+
+ggplot(data = avg_aqi_by_year, aes(x = year)) + geom_line(aes(y = lublin), color = "yellow", size = 1.2) + geom_line(aes(y = bialystok)) + geom_line(aes(y = bydgoszcz)) + geom_line(aes(y = gorzow_wlkp)) + geom_line(aes(y = katowice), color = "red", size = 1.2) + geom_line(aes(y = lodz)) + geom_line(aes(y = opole)) + geom_line(aes(y = rzeszow)) + geom_line(aes(y = szczecin), color = "green", size = 1.2) + geom_line(aes(y = torun)) + geom_line(aes(y = warszawa)) + geom_line(aes(y = zielona_gora)) + labs(x = "Year", y = "Average AQI", title = "Average AQI in provincial cities in years 2015-2020")
+
+```
+
+In this graph we can see Lublin in Yellow, Katowice (overall worst average AQI) in red and Szczecin in green (overall best average AQI). Lublin appears to be in the somewhere in the middle of the pack, with Katowice far, far above any other city. It is good to see that in each city the AQI seems to improve on a yearly basis, however I am not entirely sure this is true. 
+
+### Time series of AQI in Lublin
+
+#### Trend
+
+```{r lublin_aqi_trend_plot, fig.align = 'center', message = FALSE}
+
+ggplot(data = avg_aqi_by_month, aes(x = month_year, y = lublin, group = 1)) + geom_line(size = 1.2) + scale_x_datetime(date_breaks = "6 months", date_labels = "%m/%Y") + stat_smooth(color = "red", fill = "red", method = "loess") + stat_peaks(color = "red") + stat_peaks(color = "red", geom = "text", hjust = -0.1, x.label.fmt = "%m/%Y") + stat_valleys(color = "blue") + stat_valleys(color = "blue", geom = "text", hjust = 1, x.label.fmt = "%m/%Y") + labs(x = "Time", y = "Average AQI", title = "Average monthly AQI in Lublin")
+
+```
+This diagram only reinforces the point of increasingly better air quality in my home city. However, it also gives a good insight into how air quality changed throughout each year - we can clearly see that the air continued to be the most polluted around winter season (peaks point to January, March, November and October, while being the clearest during summer, with one outlier of 02/2020.
+
+#### Seasonality
+```{r lublin_aqi_seasonability_plot, fig.align = 'center', message = FALSE}
+
+lublin_ts <- ts(avg_aqi_by_month$lublin, frequency = 12, start = c(2015,1), end = c(2020, 12))
+
+decomposed_lublin <- decompose(lublin_ts, type="mult")
+
+ggplot(data=decomposed_lublin$seasonal) + geom_line(color = "blue", size = 1) + labs(x = "Time", y = "Seasonality", title = "Average AQI Seasonality in Lublin")
+```
+Conclusions from Trend analysis led me to believe the data is a bit seasonal. This is further fortified by the way how peaks of the seasonality diagram appear when year changes, which points to winter and valleys when it's the middle of the year, so during summer.
+
+### Seasonality between cities
+```{r aqi_seasonality_plots, fig.align = 'center', message = FALSE, fig.height = 10}
+
+par(mfrow=c(4,4))
+
+for( i in 2:length(avg_aqi_by_month) ) {
+  temp <- data.frame(date = avg_aqi_by_month[1], value = avg_aqi_by_month[i])
+  tsd <- ts(temp[2], frequency = 12, start = c(2015,1), end = c(2020, 12))
+  decomposed <- decompose(tsd, type="mult")
+  
+  seasonal_df <- as.data.frame(decomposed$seasonal)
+  
+  plot(seasonal_df, col = "blue", main = colnames(avg_aqi_by_month)[i], xlab = "", ylab = "")
+}
+```
+Seasonality pattern appears to be shared between the city with some minor exceptions. In Szczecin, there appears to be some sort of a second wave of high air pollution right after a short dip when the year starts - this seems like an interesting topic for a separate research.
+
+### Conclusions
+
+Even in doing such a simple research I found a few surprising results. For each city considered, air quality gets worse during winter and improves in summer, with some outliers. For a person like me, who was never into air pollution data, it's very interesting. A slightly worse conclusion is how Lublin's air quality is not as good as I've always imagined - I might return to this research in the future, with more data, to see if anything's changed.
+
+### Afterthought
+
+Although very rewarding, the data extraction and tidying process was way more exhausting than I've expected in the beginning. I will never underestimate this process again - it took a lot more hard work than I could imagine.
+
+Despite being very handy, `ggplot` is not always the best fit for simple plotting and investigating data - many times I found myself scrapping the idea of using it in favor of basic `plot`s without losing much visual appeal. However, this should be taken with a grain of salt, as in a real reproducible research the graphs would definetely be more complicated.
+
+Even with a basic dataset, plotting possibilities spectrum is very broad. Setting a goal in the beginning of the research and steering towards it throughout the process is beneficial and gives a sense of progress.
+
+Overall, albeit at moments tiring, the exercise turned out to provide a taste of actual R scripting, with a lot of help from fellow R enthusiasts providing help on the Internet.
