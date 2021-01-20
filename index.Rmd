@@ -69,7 +69,6 @@ What I've done to the data exported from Excel was:
 4. Remove obsolete row with station location
 5. Parse pm25 values to `dbls`
 6. Parse dates to `Date`
-7. Ensured increasing date order (from `2015-01-01` all the way to `2020-12-31`)
 
 #### Combining results into useful data frames
 

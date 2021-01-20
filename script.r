@@ -56,9 +56,6 @@ parse_pm25_csv <- function (city_name) {
   #parse dates to Dates
   frame$date <- as.Date(frame$date, format = "%Y-%m-%d")
   
-  # ensure date order
-  frame[order(frame$date, decreasing = TRUE),]
-  
   result <- frame
 }
 
@@ -91,6 +88,7 @@ base <- data.frame(
   szczecin = szczecin$pm25,
   torun = torun$pm25,
   warszawa = warszawa$pm25,
+  wroclaw = wroclaw$pm25,
   zielona_gora = zielona_gora$pm25,
   row.names = lublin$date
 )
